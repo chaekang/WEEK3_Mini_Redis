@@ -1,0 +1,23 @@
+# Rust build output
+/target/
+
+# Lockfile
+# 앱이면 보통 커밋, 라이브러리면 선택
+# Cargo.lock
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+
+# Redis-like runtime files
+*.rdb
+*.aof
+*.log
+dump.rdb
+appendonly.aof
