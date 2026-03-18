@@ -183,7 +183,7 @@ def test_dispatcher_does_not_append_when_command_fails() -> None:
 def test_apply_aof_entry_replays_without_appending_again() -> None:
     store = FakeStore()
     writer = FakeAofWriter()
-    dispatcher = Dispatcher(store, aof_writer=writer)
+    dispatcher = Dispatcher(store, aof_writer=writer, clock=lambda: 100.0)
 
     dispatcher.apply_aof_entry(AofEntry(command="SET", args=("a", "1")))
     dispatcher.apply_aof_entry(AofEntry(command="EXPIREAT", args=("a", 150.0)))
@@ -198,3 +198,35 @@ def test_apply_aof_entry_replays_without_appending_again() -> None:
     ]
     assert writer.entries == []
     assert writer.flush_calls == 0
+
+
+def test_dispatcher_appends_del_only_on_success() -> None:
+    store = FakeStore()
+    writer = FakeAofWriter()
+    dispatcher = Dispatcher(store, aof_writer=writer)
+
+    dispatcher.dispatch("SET", ["k", "v"])
+    assert len(writer.entries) == 1
+
+    store.delete = lambda key: 0
+    dispatcher.dispatch("DEL", ["k"])
+    assert len(writer.entries) == 1
+
+    dispatcher.dispatch("SET", ["k2", "v2"])
+    store.delete = lambda key: 1
+    dispatcher.dispatch("DEL", ["k2"])
+    assert writer.entries[-1] == AofEntry(command="DEL", args=("k2",))
+
+
+def test_dispatcher_appends_persist_only_on_success() -> None:
+    store = FakeStore()
+    writer = FakeAofWriter()
+    dispatcher = Dispatcher(store, aof_writer=writer)
+
+    store.persist = lambda key: 0
+    dispatcher.dispatch("PERSIST", ["x"])
+    assert writer.entries == []
+
+    store.persist = lambda key: 1
+    dispatcher.dispatch("PERSIST", ["y"])
+    assert writer.entries == [AofEntry(command="PERSIST", args=("y",))]

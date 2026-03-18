@@ -93,60 +93,66 @@ class Dispatcher:
 
         try:
             result = command_spec.handler(self.store, arguments)
-            self._append_command(command_spec.name, arguments)
+            self._append_command(command_spec.name, arguments, result)
             return result
         except CommandError:
             raise
         except Exception as error:
             raise InternalError() from error
 
-    def apply_aof_entry(self, entry: AofEntry) -> None:
-        """Apply a replayed AOF entry without generating new AOF lines."""
+    def apply_aof_entry(self, entry: AofEntry, now: float | None = None) -> None:
+        """Apply a replayed AOF entry without generating new AOF lines. EXPIREAT with expires_at <= now is skipped."""
 
-        previous_suppression = self._suppress_aof
-        self._suppress_aof = True
-        try:
-            if entry.command == "SET":
-                key, value = entry.args
-                assert isinstance(key, str)
-                assert isinstance(value, str)
-                self.store.set(key, value)
+        if now is None:
+            now = self._clock()
+
+        if entry.command == "SET":
+            key, value = entry.args
+            assert isinstance(key, str) and isinstance(value, str)
+            self.store.set(key, value)
+            return
+
+        if entry.command == "DEL":
+            (key,) = entry.args
+            assert isinstance(key, str)
+            self.store.delete(key)
+            return
+
+        if entry.command == "PERSIST":
+            (key,) = entry.args
+            assert isinstance(key, str)
+            self.store.persist(key)
+            return
+
+        if entry.command == "EXPIREAT":
+            key, expires_at = entry.args
+            assert isinstance(key, str) and type(expires_at) is float
+            if expires_at <= now:
                 return
+            self.store.expireat(key, expires_at)
+            return
 
-            if entry.command == "DEL":
-                (key,) = entry.args
-                assert isinstance(key, str)
-                self.store.delete(key)
-                return
+        raise ValueError(f"unsupported replay command: {entry.command}")
 
-            if entry.command == "PERSIST":
-                (key,) = entry.args
-                assert isinstance(key, str)
-                self.store.persist(key)
-                return
-
-            if entry.command == "EXPIREAT":
-                key, expires_at = entry.args
-                assert isinstance(key, str)
-                assert type(expires_at) is float
-                self.store.expireat(key, expires_at)
-                return
-
-            raise ValueError(f"unsupported replay command: {entry.command}")
-        finally:
-            self._suppress_aof = previous_suppression
-
-    def _append_command(self, command_name: str, arguments: Sequence[str]) -> None:
+    def _append_command(
+        self, command_name: str, arguments: Sequence[str], result: object
+    ) -> None:
         if self.aof_writer is None or self._suppress_aof:
             return
 
         if command_name == "SET":
             self.aof_writer.append_set(arguments[0], arguments[1])
         elif command_name == "DEL":
+            if result != 1:
+                return
             self.aof_writer.append_delete(arguments[0])
         elif command_name == "PERSIST":
+            if result != 1:
+                return
             self.aof_writer.append_persist(arguments[0])
         elif command_name == "EXPIRE":
+            if result != 1:
+                return
             expires_at = calculate_expires_at(
                 self._clock(),
                 _parse_int_argument("EXPIRE", arguments[1]),

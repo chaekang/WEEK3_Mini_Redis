@@ -44,6 +44,10 @@ class AofEntry:
         if not isinstance(args, list):
             raise AofParseError("AOF args must be a list")
 
+        # EXPIREAT requires float timestamp; reject int so round-trip stays float
+        if command == "EXPIREAT" and len(args) >= 2 and type(args[1]) is int:
+            raise AofParseError("EXPIREAT requires float expires_at")
+
         return cls(command=command, args=tuple(args))
 
 

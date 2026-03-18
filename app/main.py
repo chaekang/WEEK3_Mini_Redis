@@ -43,7 +43,10 @@ async def _runtime_lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.command_executor = dispatcher.dispatch
 
     try:
-        replay_aof(DEFAULT_AOF_PATH, dispatcher.apply_aof_entry)
+        replay_aof(
+            DEFAULT_AOF_PATH,
+            lambda entry, now: dispatcher.apply_aof_entry(entry, now),
+        )
         yield
     finally:
         writer.flush()
