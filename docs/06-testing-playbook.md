@@ -23,8 +23,8 @@
    - 성능 비교 시나리오 확인
 
 주의:
-- 현재 MVP 기준으로 recovery / AOF replay는 필수 테스트가 아니다.
-- 추후 AOF-lite를 도입하면 recovery 검증을 다시 활성화한다.
+- AOF recovery / replay는 persistence 범위에서 필수 검증 항목이다.
+- TTL 관련 recovery 검증은 상대 `seconds`가 아니라 절대 만료 시각 `expires_at` 기준으로 확인한다.
 
 ## 2) 테스트 도구
 - test runner: `pytest`
@@ -84,6 +84,10 @@
 
 ### D. `feature/persistence-tests-bench`
 자동 테스트 우선순위:
+- startup replay recovery
+- malformed AOF startup failure
+- replay 중 file growth 없음
+- expired-at-replay key가 다시 살아나지 않음
 - benchmark helper correctness test
 - 미니 Redis 미사용 시나리오와 사용 시나리오 비교 검증
 
@@ -92,8 +96,8 @@
 - 미니 Redis 캐시 사용 경로가 더 빠르게 응답하는지 확인
 
 주의:
-- 현재 단계에서는 AOF append/replay/recovery 테스트를 필수로 만들지 않는다.
-- `app/persistence/` 구조만 열어두고, 실제 recovery test는 추후 범위 확정 시 추가한다.
+- recovery 테스트는 AOF always-on 가정을 따른다.
+- TTL recovery는 `EXPIRE key seconds` 재실행이 아니라 AOF의 절대 만료 시각 `expires_at` 복원 규칙을 검증해야 한다.
 
 ## 5) 테스트 작성 순서
 1. 현재 브랜치가 책임지는 엔티티/명령/API를 다시 확인한다.
