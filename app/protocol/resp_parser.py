@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
-from typing import BinaryIO
+from typing import Protocol
 
 
 class RespProtocolError(Exception):
     """Raised when a RESP request does not match the supported subset."""
 
 
-def parse_command_frame(stream: BinaryIO) -> list[str] | None:
+class RespReadableStream(Protocol):
+    """Binary stream shape required by the RESP parser."""
+
+    def read(self, size: int = -1, /) -> bytes | None: ...
+
+    def readline(self, size: int = -1, /) -> bytes: ...
+
+
+def parse_command_frame(stream: RespReadableStream) -> list[str] | None:
     """Parse one RESP command frame from a binary stream.
 
     Returns ``None`` when the peer closes the stream cleanly before sending
@@ -53,7 +61,7 @@ def parse_command_frame(stream: BinaryIO) -> list[str] | None:
     return parts
 
 
-def _parse_length(stream: BinaryIO, error_message: str) -> int:
+def _parse_length(stream: RespReadableStream, error_message: str) -> int:
     line = _readline(stream, error_message)
     try:
         return int(line)
@@ -61,20 +69,20 @@ def _parse_length(stream: BinaryIO, error_message: str) -> int:
         raise RespProtocolError(error_message) from error
 
 
-def _readline(stream: BinaryIO, error_message: str) -> bytes:
+def _readline(stream: RespReadableStream, error_message: str) -> bytes:
     line = stream.readline()
     if line == b"" or not line.endswith(b"\r\n"):
         raise RespProtocolError(error_message)
     return line[:-2]
 
 
-def _read_exact(stream: BinaryIO, size: int) -> bytes:
+def _read_exact(stream: RespReadableStream, size: int) -> bytes:
     payload = stream.read(size)
     if payload is None or len(payload) != size:
         raise RespProtocolError("protocol error: incomplete bulk string")
     return payload
 
 
-def _expect_crlf(stream: BinaryIO, error_message: str) -> None:
+def _expect_crlf(stream: RespReadableStream, error_message: str) -> None:
     if stream.read(2) != b"\r\n":
         raise RespProtocolError(error_message)

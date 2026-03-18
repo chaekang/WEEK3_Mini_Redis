@@ -193,7 +193,9 @@ async def test_malformed_json_maps_to_invalid_request() -> None:
     assert fake_executor.calls == []
 
 
-def test_default_app_starts_with_missing_aof_file(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_default_app_starts_with_missing_aof_file(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.chdir(tmp_path)
 
     with TestClient(create_app()) as client:
@@ -251,7 +253,9 @@ def test_default_app_fails_startup_for_malformed_aof(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     aof_path = tmp_path / "appendonly.aof"
-    aof_path.write_text('{"command":"SET","args":["a","1"]}\nnot-json\n', encoding="utf-8")
+    aof_path.write_text(
+        '{"command":"SET","args":["a","1"]}\nnot-json\n', encoding="utf-8"
+    )
 
     with pytest.raises(AofParseError, match="line 2"):
         with TestClient(create_app()):

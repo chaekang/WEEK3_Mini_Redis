@@ -11,9 +11,7 @@ from app.core.interfaces import StoreProtocol
 from .aof import AofEntry, AofParseError
 
 
-def apply_aof_entry_to_store(
-    store: StoreProtocol, entry: AofEntry, now: float
-) -> None:
+def apply_aof_entry_to_store(store: StoreProtocol, entry: AofEntry, now: float) -> None:
     """Apply a single AOF entry to the store. Store.expireat(..., past) deletes the key."""
 
     if entry.command == "SET":
