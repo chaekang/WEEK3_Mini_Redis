@@ -1,0 +1,23 @@
+"""Shared core interfaces for command dispatch and store operations."""
+
+from __future__ import annotations
+
+from typing import Protocol
+
+
+class StoreProtocol(Protocol):
+    """Store boundary used by the command layer."""
+
+    def get(self, key: str) -> tuple[bool, str | None]: ...
+
+    def set(self, key: str, value: str) -> str: ...
+
+    def delete(self, key: str) -> int: ...
+
+    def expire(self, key: str, seconds: int) -> int: ...
+
+    def ttl(self, key: str) -> int: ...
+
+    def persist(self, key: str) -> int: ...
+
+    def sweep_expired(self) -> int: ...
