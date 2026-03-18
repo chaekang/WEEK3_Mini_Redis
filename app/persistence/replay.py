@@ -14,7 +14,7 @@ from .aof import AofEntry, AofParseError
 def apply_aof_entry_to_store(
     store: StoreProtocol, entry: AofEntry, now: float
 ) -> None:
-    """Apply a single AOF entry to the store. EXPIREAT with expires_at <= now is skipped."""
+    """Apply a single AOF entry to the store. Store.expireat(..., past) deletes the key."""
 
     if entry.command == "SET":
         key, value = entry.args
@@ -37,8 +37,6 @@ def apply_aof_entry_to_store(
     if entry.command == "EXPIREAT":
         key, expires_at = entry.args
         assert isinstance(key, str) and type(expires_at) is float
-        if expires_at <= now:
-            return
         store.expireat(key, expires_at)
         return
 

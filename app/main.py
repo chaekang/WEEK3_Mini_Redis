@@ -53,7 +53,8 @@ def create_app(command_executor: CommandExecutor | None = None) -> FastAPI:
         title="Mini Redis",
         lifespan=None if command_executor is not None else _runtime_lifespan,
     )
-    app.state.command_executor = command_executor
+    if command_executor is not None:
+        app.state.command_executor = command_executor
     install_exception_handlers(app)
     app.include_router(create_http_router(_delegating_command_executor(app)))
     return app

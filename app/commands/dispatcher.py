@@ -101,7 +101,7 @@ class Dispatcher:
             raise InternalError() from error
 
     def apply_aof_entry(self, entry: AofEntry, now: float | None = None) -> None:
-        """Apply a replayed AOF entry without generating new AOF lines. EXPIREAT with expires_at <= now is skipped."""
+        """Apply a replayed AOF entry without generating new AOF lines."""
 
         if now is None:
             now = self._clock()
@@ -127,8 +127,6 @@ class Dispatcher:
         if entry.command == "EXPIREAT":
             key, expires_at = entry.args
             assert isinstance(key, str) and type(expires_at) is float
-            if expires_at <= now:
-                return
             self.store.expireat(key, expires_at)
             return
 

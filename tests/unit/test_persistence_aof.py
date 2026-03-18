@@ -161,8 +161,8 @@ def test_replay_rejects_expireat_with_integer_timestamp() -> None:
             replay_aof(aof_path, lambda entry, now: None)
 
 
-def test_apply_aof_entry_to_store_skips_expired_expireat() -> None:
-    """EXPIREAT with expires_at <= now is not applied (key stays without TTL)."""
+def test_apply_aof_entry_to_store_calls_expireat_so_store_can_delete_expired() -> None:
+    """EXPIREAT is always applied; store.expireat(..., past) deletes the key."""
 
     class RecordingStore:
         def __init__(self) -> None:
@@ -201,7 +201,7 @@ def test_apply_aof_entry_to_store_skips_expired_expireat() -> None:
     apply_aof_entry_to_store(
         store, AofEntry("EXPIREAT", ("k", 50.0)), 100.0
     )
-    assert store.calls == [("set", ("k", "v"))]
+    assert store.calls == [("set", ("k", "v")), ("expireat", ("k", 50.0))]
 
     store.calls.clear()
     apply_aof_entry_to_store(
