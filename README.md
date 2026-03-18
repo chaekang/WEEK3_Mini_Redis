@@ -100,10 +100,10 @@ python -m app.main
 
 ## 문서 목록
 - [작업 규칙](AGENTS.md)
-- [제품 범위](../../../../Downloads/mini-redis-docs/docs/01-product-scope.md)
-- [아키텍처](../../../../Downloads/mini-redis-docs/docs/02-architecture.md)
-- [명령 의미론](../../../../Downloads/mini-redis-docs/docs/03-command-semantics.md)
-- [개발 가이드](../../../../Downloads/mini-redis-docs/docs/04-development-guide.md)
-- [협업 플레이북](../../../../Downloads/mini-redis-docs/docs/05-codex-collaboration-playbook.md)
-- [테스트 플레이북](../../../../Downloads/mini-redis-docs/docs/06-testing-playbook.md)
-- [팀 킥오프 스크립트](../../../../Downloads/mini-redis-docs/docs/07-team-kickoff-script.md)
+- [제품 범위](./docs/01-product-scope.md)
+- [아키텍처](./docs/02-architecture.md)
+- [명령 의미론](./docs/03-command-semantics.md)
+- [개발 가이드](./docs/04-development-guide.md)
+- [협업 플레이북](./docs/05-codex-collaboration-playbook.md)
+- [테스트 플레이북](./docs/06-testing-playbook.md)
+- [팀 킥오프 스크립트](./docs/07-team-kickoff-script.md)
