@@ -4,8 +4,10 @@ from typing import Any
 
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.persistence import AofParseError, AofWriter
 from app.protocol.http_handlers import CommandExecutionError
 from app.protocol.schemas import CommandResult
 
@@ -191,13 +193,77 @@ async def test_malformed_json_maps_to_invalid_request() -> None:
     assert fake_executor.calls == []
 
 
-@pytest.mark.anyio
-async def test_default_app_wires_the_real_command_stack() -> None:
-    app = create_app()
+def test_default_app_starts_with_missing_aof_file(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
 
-    ping_response = await request(app, "GET", "/v1/ping")
-    set_response = await request(app, "PUT", "/v1/keys/alpha", json={"value": "1"})
-    get_response = await request(app, "GET", "/v1/keys/alpha")
+    with TestClient(create_app()) as client:
+        ping_response = client.get("/v1/ping")
+        get_response = client.get("/v1/keys/alpha")
+
+    assert ping_response.status_code == 200
+    assert ping_response.json() == {"result": "PONG"}
+    assert get_response.status_code == 200
+    assert get_response.json() == {"found": False, "value": None}
+
+
+def test_default_app_recovers_state_from_aof_without_growing_log(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    aof_path = tmp_path / "appendonly.aof"
+
+    with AofWriter(aof_path) as writer:
+        writer.append_set("alpha", "1")
+        writer.append_expireat("alpha", 4102444800.0)
+        writer.append_persist("alpha")
+
+    original_lines = aof_path.read_text(encoding="utf-8").splitlines()
+
+    with TestClient(create_app()) as client:
+        response = client.get("/v1/keys/alpha")
+
+    replayed_lines = aof_path.read_text(encoding="utf-8").splitlines()
+
+    assert response.status_code == 200
+    assert response.json() == {"found": True, "value": "1"}
+    assert replayed_lines == original_lines
+
+
+def test_default_app_does_not_revive_expired_replay_entries(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    aof_path = tmp_path / "appendonly.aof"
+
+    with AofWriter(aof_path) as writer:
+        writer.append_set("stale", "value")
+        writer.append_expireat("stale", 1.0)
+
+    with TestClient(create_app()) as client:
+        response = client.get("/v1/keys/stale")
+
+    assert response.status_code == 200
+    assert response.json() == {"found": False, "value": None}
+
+
+def test_default_app_fails_startup_for_malformed_aof(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    aof_path = tmp_path / "appendonly.aof"
+    aof_path.write_text('{"command":"SET","args":["a","1"]}\nnot-json\n', encoding="utf-8")
+
+    with pytest.raises(AofParseError, match="line 2"):
+        with TestClient(create_app()):
+            pass
+
+
+def test_default_app_wires_the_real_command_stack() -> None:
+    """Use TestClient so app lifespan runs and command_executor is set."""
+    with TestClient(create_app()) as client:
+        ping_response = client.get("/v1/ping")
+        set_response = client.put("/v1/keys/alpha", json={"value": "1"})
+        get_response = client.get("/v1/keys/alpha")
 
     assert ping_response.status_code == 200
     assert ping_response.json() == {"result": "PONG"}
