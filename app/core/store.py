@@ -14,7 +14,6 @@ from app.core.hash_table import HashTable
 from app.core.lock import StoreLock, create_store_lock
 
 
-
 class Store:
     """In-memory key/value store with TTL metadata and coarse locking."""
 
