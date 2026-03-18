@@ -3,9 +3,10 @@
 ## 구현 시작 전 확정 항목
 1. 문서 초안 확정
 2. MVP / Stretch 범위 확정
-3. 역할 분담 초안 확정
-4. 브랜치 전략 확정
-5. 테스트 계층 확정
+3. 동시성 모델 확정 (`store-level coarse lock`)
+4. 역할 분담 초안 확정
+5. 브랜치 전략 확정
+6. 테스트 계층 확정
 
 ## 구현 원칙
 - 먼저 문서, 다음 코드
@@ -46,6 +47,7 @@
 - external interface: HTTP + JSON
 - 필수 명령 목록
 - expiration rules
+- 동시성 모델: store-level coarse lock
 - branch/role 분배
 - 테스트 최소선
 
@@ -74,6 +76,7 @@
   - command semantics
   - error format
   - TTL rules
+  - concurrency model
   - AOF replay behavior
 
 ## AI 사용 원칙

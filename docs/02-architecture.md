@@ -54,19 +54,26 @@ flowchart LR
 - write 명령 append
 - 서버 시작 시 replay
 
-## 권장 동시성 모델
+## 동시성 모델
 
-### 옵션 A. coarse lock
-- store 전체에 락 1개
-- 장점: 구현 단순, semantics 안정적
-- 단점: 병렬 처리량 낮음
+### 결정: store-level coarse lock
+- store 전체에 락 1개를 둔다.
+- HTTP layer는 동시 요청을 받을 수 있지만, store 진입은 lock으로 직렬화한다.
+- `GET`, `SET`, `DEL`, `EXPIRE`, `TTL`, `PERSIST`는 모두 같은 lock 규칙을 따른다.
+- lazy expiration, periodic sweep, replay apply도 같은 lock 규칙을 따른다.
+- 각 store 메서드는 atomic한 store-level 동작으로 완료되어야 한다.
+- periodic sweep는 lock 점유 시간을 줄이기 위해 bounded batch 처리 허용
 
-### 옵션 B. single event loop
-- 한 번에 한 요청씩 처리
-- 장점: race condition 관리 쉬움
-- 단점: 느린 작업 하나가 전체를 막을 수 있음
+선택 이유:
+- MVP 목표가 처리량보다 semantics 안정성과 데모 안정성에 더 가깝다.
+- protocol 구현과 store 구현을 강하게 결합하지 않아 branch-scoped 작업에 유리하다.
+- RESP를 나중에 추가하더라도 protocol 교체와 concurrency model 교체를 분리할 수 있다.
 
-**권장 결정**: coarse lock 또는 single-thread loop 둘 중 하나만 선택한다.
+이번 MVP에서 하지 않는 것:
+- single event loop 기반 직렬 처리
+- per-key lock
+- read/write lock
+- lock-free 구조
 
 ## 명령 처리 흐름
 1. client 요청 도착

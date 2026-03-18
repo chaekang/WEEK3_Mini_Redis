@@ -17,7 +17,7 @@
 - `EXPIRE`, `TTL`, `PERSIST`
 - HTTP + JSON external interface
 - lazy expiration + periodic expiration sweep
-- coarse lock 또는 단일 이벤트 루프 기반 안전한 요청 처리
+- store-level coarse lock 기반 안전한 요청 처리
 - 단위 테스트, 통합 테스트, 수동 smoke test
 
 ## Stretch 범위

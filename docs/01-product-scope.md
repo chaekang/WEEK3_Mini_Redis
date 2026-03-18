@@ -34,6 +34,7 @@
    - hash table 기반 저장소
    - expiration metadata 관리
    - HTTP + JSON external interface 1종
+   - store-level coarse lock 기반 동시성 제어
    - unit / integration / smoke test
 
 4. **필수 데모**
@@ -72,6 +73,7 @@
 ## 구현 전 확정 항목
 - MVP 범위
 - command semantics
+- 동시성 모델: store-level coarse lock
 - branch / role 분리 기준
 - 테스트 계층
 - kickoff 순서

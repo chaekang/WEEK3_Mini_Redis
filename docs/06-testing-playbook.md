@@ -58,6 +58,7 @@
 - `EXPIRE`, `TTL`, `PERSIST`
 - lazy expiration
 - periodic sweep helper
+- coarse lock 하에서 상태 일관성이 유지되는지
 
 수동 smoke:
 - TTL이 감소하는지
@@ -91,6 +92,7 @@
 - overwrite
 - TTL remove on SET
 - PERSIST success / failure
+- concurrent `GET` / `SET` / `EXPIRE` access safety under coarse lock
 - INCR parse failure (stretch)
 
 ### integration test
