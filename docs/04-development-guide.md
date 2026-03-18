@@ -92,14 +92,16 @@
 - README 데모 정리
 
 ### P3 - 여유가 있으면
-- AOF-lite
 - benchmark 자동화 확장
 - stretch 명령
 
-## AOF-lite에 대한 현재 결정
-- `app/persistence/` 구조는 미리 열어둔다.
-- 그러나 현재 MVP 일정에서는 AOF-lite를 구현하지 않는다.
-- replay, recovery test, append format은 추후 `feature/persistence-tests-bench`에서 다룬다.
+## AOF Persistence에 대한 현재 결정
+- AOF는 always-on으로 동작한다.
+- AOF 파일 이름은 `appendonly.aof`로 고정한다.
+- startup 시 AOF replay를 먼저 수행한 뒤 외부 요청을 받는다.
+- malformed AOF는 부분 복구 없이 startup fail-fast로 처리한다.
+- `EXPIRE key seconds`는 외부 명령 semantics를 유지하되, 내부 AOF에는 절대 만료 시각 `expires_at`으로 저장한다.
+- recovery와 replay behavior는 절대 만료 시각 기준으로 검증한다.
 
 ## 충돌 처리 규칙
 - 텍스트 conflict 자체는 두려워하지 않는다.
@@ -143,8 +145,8 @@
 - Python smoke script
 
 ### `feature/persistence-tests-bench`
-- 현재는 구조만 유지
-- 실제 AOF-lite 구현은 추후 일정이 허용될 때 진행
+- always-on AOF wiring
+- startup replay and recovery test
 - benchmark script는 우선 미니 Redis 미사용/사용 비교 시나리오를 기준으로 한다
 
 ## Merge 기준
