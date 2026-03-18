@@ -198,13 +198,9 @@ def test_apply_aof_entry_to_store_calls_expireat_so_store_can_delete_expired() -
 
     store = RecordingStore()
     apply_aof_entry_to_store(store, AofEntry("SET", ("k", "v")), 100.0)
-    apply_aof_entry_to_store(
-        store, AofEntry("EXPIREAT", ("k", 50.0)), 100.0
-    )
+    apply_aof_entry_to_store(store, AofEntry("EXPIREAT", ("k", 50.0)), 100.0)
     assert store.calls == [("set", ("k", "v")), ("expireat", ("k", 50.0))]
 
     store.calls.clear()
-    apply_aof_entry_to_store(
-        store, AofEntry("EXPIREAT", ("k", 150.0)), 100.0
-    )
+    apply_aof_entry_to_store(store, AofEntry("EXPIREAT", ("k", 150.0)), 100.0)
     assert store.calls == [("expireat", ("k", 150.0))]
