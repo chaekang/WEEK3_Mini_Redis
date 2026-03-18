@@ -7,12 +7,37 @@
 4. 역할 분담 초안 확정
 5. 브랜치 전략 확정
 6. 테스트 계층 확정
+7. 기술 스택 확정
 
 ## 구현 원칙
 - 먼저 문서, 다음 코드
 - 먼저 semantics, 다음 implementation
 - 먼저 branch scope, 다음 AI prompt
 - 먼저 자동 테스트, 다음 데모 polish
+
+## 현재 확정 기술 스택
+
+### 런타임 / 서버
+- Python
+- FastAPI
+
+### 테스트
+- `pytest`
+- `pytest-cov`
+- `pytest-mock`
+- `time-machine`
+- `httpx`
+
+### 정적 검증
+- `ruff` for lint + format
+- `mypy` for type check
+
+### 권장 실행 명령
+- lint: `ruff check .`
+- format: `ruff format .`
+- type check: `mypy app`
+- test: `pytest`
+- coverage: `pytest --cov=app --cov-report=term-missing`
 
 ## 브랜치 전략
 권장 브랜치:
@@ -45,28 +70,36 @@
 
 ### P0 - 구현 전에 무조건 결정
 - external interface: HTTP + JSON
+- FastAPI 사용
+- REST-like HTTP endpoint 구조
 - 필수 명령 목록
 - expiration rules
 - 동시성 모델: store-level coarse lock
 - branch/role 분배
 - 테스트 최소선
+- 정적 검증 및 테스트 도구
 
 ### P1 - 초기 구현 단계
 - 프로젝트 skeleton
 - store core
-- command dispatcher
+- command dispatcher + registry
+- FastAPI HTTP entrypoint
 - 필수 test scaffold
 
 ### P2 - 기능 연결 단계
-- HTTP entrypoint 연결
-- expiration sweep
-- smoke flow 연결
+- expiration sweep 연결
+- smoke Python script 연결
 - README 데모 정리
 
 ### P3 - 여유가 있으면
 - AOF-lite
-- benchmark 자동화
+- benchmark 자동화 확장
 - stretch 명령
+
+## AOF-lite에 대한 현재 결정
+- `app/persistence/` 구조는 미리 열어둔다.
+- 그러나 현재 MVP 일정에서는 AOF-lite를 구현하지 않는다.
+- replay, recovery test, append format은 추후 `feature/persistence-tests-bench`에서 다룬다.
 
 ## 충돌 처리 규칙
 - 텍스트 conflict 자체는 두려워하지 않는다.
@@ -78,12 +111,41 @@
   - TTL rules
   - concurrency model
   - AOF replay behavior
+  - HTTP endpoint contract
+  - Store API contract
 
 ## AI 사용 원칙
 - 한 AI 프롬프트는 한 결과만 요청한다.
 - 구현 전 반드시 “allowed files / fixed contracts / out-of-scope”를 요약하게 한다.
 - AI가 만든 테스트는 사람이 시나리오 관점에서 검토한다.
 - AI가 command semantics를 임의로 바꾸지 못하게 한다.
+- FastAPI, endpoint 모양, store API, lock 정책은 문서 합의 없이 바꾸지 않는다.
+
+## 권장 브랜치별 초점
+
+### `feature/contracts-foundation`
+- command registry
+- shared errors
+- dispatcher contract
+- store interface 문서와 스켈레톤
+
+### `feature/store-expiration`
+- Python `dict` 기반 저장소
+- 절대 만료 시각 저장
+- lazy expiration
+- periodic sweep
+- `threading.Lock` 기반 coarse lock
+
+### `feature/protocol-network`
+- FastAPI route
+- request body schema
+- response serialization
+- Python smoke script
+
+### `feature/persistence-tests-bench`
+- 현재는 구조만 유지
+- 실제 AOF-lite 구현은 추후 일정이 허용될 때 진행
+- benchmark script는 우선 미니 Redis 미사용/사용 비교 시나리오를 기준으로 한다
 
 ## Merge 기준
 - 자동 테스트 통과
