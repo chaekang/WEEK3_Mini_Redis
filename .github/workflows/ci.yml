@@ -13,9 +13,15 @@ on:
   pull_request:
     branches:
       - main
+      - develop
+      - "feature/**"
+      - "fix/**"
+      - "test/**"
+      - "chore/**"
+      - "docs/**"
 
 jobs:
-  test:
+  verify:
     runs-on: ubuntu-latest
 
     steps:
@@ -32,7 +38,14 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
-          pip install pytest
 
-      - name: Run tests
+      - name: Run Ruff
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Run MyPy
+        run: mypy app
+
+      - name: Run Pytest
         run: python -m pytest -q
