@@ -1,6 +1,7 @@
 import threading
-from typing import Optional
+from typing import List, Optional, Tuple
 
+from app.core.hash_table import HashTable
 from app.core.store import Store
 
 
@@ -18,6 +19,8 @@ class FakeClock:
 def test_set_get_and_delete_round_trip() -> None:
     store = Store()
 
+    assert isinstance(store.data_map, HashTable)
+    assert isinstance(store.expire_map, HashTable)
     assert store.set("alpha", "one") == "OK"
     assert store.get("alpha") == (True, "one")
     assert store.delete("alpha") == 1
@@ -37,6 +40,13 @@ def test_set_overwrite_clears_existing_ttl() -> None:
     assert store.get("session") == (True, "v2")
     assert store.ttl("session") == -1
     assert "session" not in store.expire_map
+
+
+def test_store_uses_hash_table_for_both_internal_maps() -> None:
+    store = Store()
+
+    assert isinstance(store.data_map, HashTable)
+    assert isinstance(store.expire_map, HashTable)
 
 
 def test_expire_non_positive_seconds_deletes_immediately() -> None:
@@ -69,7 +79,7 @@ def test_store_operations_serialize_on_the_shared_coarse_lock() -> None:
 
     started = threading.Event()
     completed = threading.Event()
-    results: list[tuple[bool, Optional[str]]] = []
+    results: List[Tuple[bool, Optional[str]]] = []
 
     def worker() -> None:
         started.set()

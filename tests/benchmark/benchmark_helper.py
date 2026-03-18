@@ -300,6 +300,10 @@ def _create_mini_redis_app() -> FastAPI:
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
+    from app.commands.dispatcher import Dispatcher
+    from app.core.store import Store
     from app.main import create_app
 
-    return create_app()
+    store = Store()
+    dispatcher = Dispatcher(store)
+    return create_app(command_executor=dispatcher.dispatch)
