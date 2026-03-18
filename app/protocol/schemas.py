@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Protocol, TypeAlias
+from typing import Optional, Protocol, Tuple, Union
+
+from typing_extensions import TypeAlias
 
 from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
 
-CommandResult: TypeAlias = str | int | tuple[bool, str | None]
+CommandResult: TypeAlias = Union[str, int, Tuple[bool, Optional[str]]]
 
 
 class CommandExecutor(Protocol):
@@ -49,7 +51,7 @@ class GetValueResponse(BaseModel):
     """JSON envelope for GET responses."""
 
     found: bool
-    value: str | None
+    value: Optional[str]
 
 
 class ErrorResponse(BaseModel):

@@ -10,7 +10,9 @@ import pytest
 
 def load_benchmark_helper() -> ModuleType:
     helper_path = Path(__file__).with_name("benchmark_helper.py")
-    spec = importlib.util.spec_from_file_location("benchmark_helper_for_tests", helper_path)
+    spec = importlib.util.spec_from_file_location(
+        "benchmark_helper_for_tests", helper_path
+    )
     assert spec is not None
     assert spec.loader is not None
 

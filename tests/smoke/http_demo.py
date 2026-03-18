@@ -15,8 +15,12 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="HTTP base URL for the running Mini Redis server, for example http://127.0.0.1:8000",
     )
-    parser.add_argument("--key", default="smoke:demo", help="Key used during the smoke run.")
-    parser.add_argument("--value", default="hello", help="Value written during the smoke run.")
+    parser.add_argument(
+        "--key", default="smoke:demo", help="Key used during the smoke run."
+    )
+    parser.add_argument(
+        "--value", default="hello", help="Value written during the smoke run."
+    )
     parser.add_argument(
         "--expire-seconds",
         type=int,
@@ -34,7 +38,9 @@ def parse_args() -> argparse.Namespace:
 
 def assert_json(response: Any, expected: dict[str, object], step: str) -> None:
     if response.status_code != 200:
-        raise RuntimeError(f"{step} returned HTTP {response.status_code}: {response.text}")
+        raise RuntimeError(
+            f"{step} returned HTTP {response.status_code}: {response.text}"
+        )
     payload = response.json()
     if payload != expected:
         raise RuntimeError(f"{step} returned unexpected payload: {payload}")
@@ -48,7 +54,10 @@ def main() -> int:
     try:
         import httpx
     except ModuleNotFoundError:
-        print("Smoke failed: httpx is not installed in the current Python environment.", file=sys.stderr)
+        print(
+            "Smoke failed: httpx is not installed in the current Python environment.",
+            file=sys.stderr,
+        )
         return 1
 
     try:
@@ -72,7 +81,9 @@ def main() -> int:
 
             print("4. EXPIRE")
             assert_json(
-                client.post(f"{key_path}/expire", json={"seconds": args.expire_seconds}),
+                client.post(
+                    f"{key_path}/expire", json={"seconds": args.expire_seconds}
+                ),
                 {"result": 1},
                 "EXPIRE",
             )
@@ -85,7 +96,10 @@ def main() -> int:
                 )
             ttl_payload = ttl_response.json()
             ttl_result = ttl_payload.get("result")
-            if type(ttl_result) is not int or not 0 <= ttl_result <= args.expire_seconds:
+            if (
+                type(ttl_result) is not int
+                or not 0 <= ttl_result <= args.expire_seconds
+            ):
                 raise RuntimeError(f"TTL returned unexpected payload: {ttl_payload}")
 
             time.sleep(args.expire_seconds + args.wait_padding)

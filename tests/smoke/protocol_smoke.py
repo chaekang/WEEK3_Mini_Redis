@@ -32,12 +32,6 @@ def main() -> int:
         )
 
         set_response = client.put("/v1/keys/demo", json={"value": "hello"})
-        if _is_dependency_blocked(set_response):
-            print(
-                "Dependency not wired: downstream dispatcher/store integration is not connected yet."
-            )
-            return 0
-
         _expect_json(set_response, 200, {"result": "OK"}, "SET")
 
         get_response = client.get("/v1/keys/demo")
@@ -89,12 +83,6 @@ def _expect_status(response: httpx.Response, expected_status: int, label: str) -
         raise AssertionError(
             f"{label}: expected status {expected_status}, got {response.status_code} with body {response.text!r}"
         )
-
-
-def _is_dependency_blocked(response: httpx.Response) -> bool:
-    return response.status_code == 500 and response.json() == {
-        "error": "internal error"
-    }
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from typing import Callable, TypeVar
 T = TypeVar("T")
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class BenchmarkResult:
     name: str
     iterations: int
@@ -16,7 +16,7 @@ class BenchmarkResult:
     average_seconds: float
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class BenchmarkComparison:
     without_cache: BenchmarkResult
     with_cache: BenchmarkResult
@@ -75,7 +75,9 @@ def compare_cases(
         warmup=warmup,
     )
 
-    cache_is_faster = with_cache_result.total_seconds < without_cache_result.total_seconds
+    cache_is_faster = (
+        with_cache_result.total_seconds < without_cache_result.total_seconds
+    )
 
     if with_cache_result.total_seconds == 0:
         speedup = float("inf")
