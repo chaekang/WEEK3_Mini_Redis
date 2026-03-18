@@ -180,6 +180,9 @@ flowchart LR
 - invalid integer parse -> `"invalid integer for <COMMAND>: <VALUE>"`
 - wrong type -> `"wrong type for <COMMAND>"`
 - internal error -> `"internal error"`
+- protocol-level request validation도 같은 `{ "error": "..." }` 형식으로 정규화한다.
+- endpoint로 command를 알 수 있으면 누락된 필수 JSON 필드는 `"wrong number of arguments for <COMMAND>"`로 매핑한다.
+- endpoint로 command를 알 수 있으면 잘못된 JSON 타입은 `"wrong type for <COMMAND>"`로 매핑하고, raw malformed JSON은 `400` + `"invalid request"`를 사용한다.
 
 표기 규칙:
 - `<COMMAND>`는 대문자 명령 이름을 사용한다.
