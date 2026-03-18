@@ -20,7 +20,7 @@
    - 데모 전 전체 명령 흐름 점검
 
 5. **benchmark 검증**
-   - 성능 비교 시나리오 확인
+   - 발표용 비교 시나리오 확인
 
 주의:
 - AOF recovery / replay는 persistence 범위에서 필수 검증 항목이다.
@@ -43,46 +43,50 @@
 - snapshot보다 입력/출력과 행동 검증을 우선한다.
 - 외부 시스템은 mock 하되, branch 핵심 로직은 가능한 실제 로직으로 검증한다.
 - 테스트 파일은 기능과 같은 경계에 둔다.
-- smoke test는 Python 스크립트로 작성한다.
+- smoke test는 transport에 맞는 실제 client 형태를 사용한다.
+- RESP 추가가 HTTP regression을 깨뜨리지 않는지 반드시 확인한다.
 
 ## 4) 브랜치별 테스트 책임
 
-### A. `feature/contracts-foundation`
+### A. `feature/protocol-resp`
 자동 테스트 우선순위:
-- command arity validation
-- error mapping unit test
-- registry dispatch test
+- RESP parser unit test
+- RESP codec unit test
+- RESP integration test
+- same-dispatcher semantics regression
+- HTTP regression test
 
 수동 smoke:
-- 잘못된 명령이 에러로 응답되는지 확인
-- command 이름과 문서가 일치하는지 확인
+- RESP로 `PING`, `SET`, `GET`, `TTL` 호출
+- malformed RESP frame이 simple error로 실패하는지 확인
+- 기존 HTTP smoke가 그대로 동작하는지 확인
 
-### B. `feature/protocol-network`
+### B. `feature/store-hash-table`
 자동 테스트 우선순위:
-- FastAPI route input/output test
-- serializer response test
-- `httpx` 기반 request/response integration test
+- collision handling
+- linear probing continuity
+- tombstone delete
+- resize / rehash
+- `GET`, `SET`, `DEL`, `EXPIRE`, `TTL`, `PERSIST` semantics regression
+- overwrite 시 TTL 제거 유지
 
 수동 smoke:
-- Python smoke script로 `PING`, `SET`, `GET` 호출
-- malformed request가 안전하게 실패하는지 확인
+- store-level 시나리오에서 기존 명령 의미론이 바뀌지 않았는지 확인
 
-### C. `feature/store-expiration`
+### C. `feature/store-heap-sweep`
 자동 테스트 우선순위:
-- dict store put/get/delete
-- overwrite behavior
-- `SET`이 TTL 제거하는지
-- `EXPIRE`, `TTL`, `PERSIST`
-- 절대 만료 시각 저장/계산
-- lazy expiration
-- 1초 주기 periodic sweep
-- coarse lock 하에서 상태 일관성이 유지되는지
+- heap ordering
+- stale heap entry cleanup
+- TTL / lazy expiration interaction
+- periodic sweep cleanup path
+- store expiration regression
 
 수동 smoke:
 - TTL이 감소하는지
 - 만료 후 조회가 miss인지
+- lazy expiration과 sweep가 같은 결과를 내는지 확인
 
-### D. `feature/persistence-tests-bench`
+### D. `chore/demo-bench-ci-readme`
 자동 테스트 우선순위:
 - startup replay recovery
 - malformed AOF startup failure
@@ -100,7 +104,7 @@
 - TTL recovery는 `EXPIRE key seconds` 재실행이 아니라 AOF의 절대 만료 시각 `expires_at` 복원 규칙을 검증해야 한다.
 
 ## 5) 테스트 작성 순서
-1. 현재 브랜치가 책임지는 엔티티/명령/API를 다시 확인한다.
+1. 현재 브랜치가 책임지는 엔티티 / 명령 / API를 다시 확인한다.
 2. 실패했을 때 merge를 막아야 하는 핵심 규칙 3~5개를 먼저 고른다.
 3. 그 규칙에 대한 자동 테스트를 먼저 추가한다.
 4. 자동화가 어려운 것은 수동 체크리스트로 남긴다.
@@ -109,47 +113,54 @@
 ## 6) 권장 테스트 목록
 
 ### unit test
-- missing key read
-- overwrite
-- TTL remove on SET
-- PERSIST success / failure
+- RESP bulk-array parsing
+- RESP serializer type mapping
+- hash collision resolution
+- tombstone reuse
+- TTL remove on `SET`
+- `PERSIST` success / failure
 - expired key access returns miss semantics
-- concurrent `GET` / `SET` / `EXPIRE` access safety under coarse lock
+- stale heap entry skip logic
 
 ### integration test
-- client -> FastAPI route -> dispatcher -> store 흐름
+- client -> protocol layer -> dispatcher -> store 흐름
 - malformed command
+- malformed RESP request
 - expired key access
 - multi-command flow
+- HTTP regression after RESP wiring
 
 ### smoke test
 - `GET /v1/ping`
 - `PUT /v1/keys/a` with `{ "value": "1" }`
 - `GET /v1/keys/a`
+- RESP `PING`
+- RESP `SET a 1`
+- RESP `GET a`
 - `POST /v1/keys/a/expire` with `{ "seconds": 1 }`
-- 1초 후 `GET /v1/keys/a` miss
-- `DELETE /v1/keys/a/expiration`
+- 1초 후 HTTP 또는 RESP에서 `GET a` miss
 
 ### benchmark test
-- 미니 Redis 서버 없는 경우의 응답 시간
-- 미니 Redis 서버를 써서 캐싱한 경우의 응답 시간
+- demo benchmark helper correctness
+- benchmark repeatability over short runs
+- 발표용 상대 비교 흐름이 재현되는지 확인
 
 ## 7) smoke script 원칙
-- smoke는 Python 스크립트로 작성한다.
-- `httpx`를 사용해 실제 HTTP endpoint를 호출한다.
+- smoke는 branch에 맞는 실제 client로 작성한다.
+- HTTP smoke는 `httpx`를 사용한다.
+- RESP smoke는 raw socket 또는 동등한 client path를 사용한다.
 - 스크립트는 데모 순서를 그대로 따라가야 한다.
 - 실패 시 어느 단계에서 깨졌는지 바로 알 수 있는 메시지를 출력한다.
 
 ## 8) benchmark 원칙
-- 비교 대상은 아래 2개로 고정한다.
-  - 미니 Redis 서버 없이 처리하는 경우
-  - 미니 Redis 서버를 캐시로 사용해 더 빠르게 처리하는 경우
 - benchmark는 절대 수치보다 상대 비교를 보여주는 데 목적이 있다.
 - 발표용 벤치는 짧고 반복 가능해야 한다.
+- core semantics를 바꾸는 최적화는 benchmark 이유로 허용하지 않는다.
 
 ## 9) 사람이 해야 하는 것
 AI가 기본적으로 도와줄 수 있는 것:
 - unit / integration test 초안 생성
+- RESP smoke script 초안 생성
 - benchmark script 초안 생성
 - 수동 smoke checklist 정리
 
@@ -163,7 +174,7 @@ AI가 기본적으로 도와줄 수 있는 것:
 
 ### 자동 테스트 생성용
 ```text
-Read AGENTS.md and docs/01 through docs/06. Work only inside branch <branch-name>. Generate only the tests that belong to this branch scope. Follow the documented FastAPI endpoint contract, store API contract, and coarse-lock model. Prefer blocking business rules and command behavior over broad snapshots. At the end, summarize what was tested automatically and what still requires manual verification.
+Read AGENTS.md and docs/01 through docs/06. Work only inside branch <branch-name>. Generate only the tests that belong to this branch scope. Follow the documented HTTP contract, RESP request rules, Store API contract, and coarse-lock model. Prefer blocking business rules and command behavior over broad snapshots. At the end, summarize what was tested automatically and what still requires manual verification.
 ```
 
 ### PR 직전 검증용
@@ -172,6 +183,10 @@ Read AGENTS.md and docs/01 through docs/06. Review this branch from a testing pe
 ```
 
 ## 11) 최소 CI 기준
-- PR마다 자동 테스트 실행
+- PR마다 아래 검증을 실행한다.
+  - `ruff check .`
+  - `ruff format --check .`
+  - `mypy app`
+  - `pytest`
 - 실패 시 merge 금지
-- smoke는 수동 체크리스트 또는 Python smoke script 실행 결과로 PR 본문에 기록
+- smoke는 수동 체크리스트 또는 smoke script 실행 결과로 PR 본문에 기록
