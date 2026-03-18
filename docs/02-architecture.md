@@ -52,8 +52,8 @@ flowchart LR
 - `expire_map`: key -> expires_at(unix time)
 
 고정 결정:
-- 현재 MVP 저장소의 기본 자료구조는 Python `dict`다.
-- 추후 직접 구현한 hash table로 교체할 수 있도록 store wrapper 형태를 유지한다.
+- 현재 MVP 저장소의 기본 자료구조는 직접 구현한 hash table이다.
+- store는 public API를 유지한 채 내부에서 hash table 구현을 감싸는 wrapper 형태를 유지한다.
 - 만료 시각은 상대 시간이 아니라 절대 만료 시각(unix timestamp)으로 저장한다.
 
 ### 4) Expiration Metadata

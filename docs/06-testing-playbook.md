@@ -69,7 +69,7 @@
 
 ### C. `feature/store-expiration`
 자동 테스트 우선순위:
-- dict store put/get/delete
+- hash table 기반 store put/get/delete
 - overwrite behavior
 - `SET`이 TTL 제거하는지
 - `EXPIRE`, `TTL`, `PERSIST`

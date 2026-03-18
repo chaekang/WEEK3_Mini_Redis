@@ -79,7 +79,7 @@ Read AGENTS.md and docs/01 through docs/06. Work only inside the scope of branch
 - 핵심 저장소와 TTL 로직 구현
 
 주요 결과물:
-- `dict` 기반 store wrapper
+- 직접 구현한 hash table 기반 store wrapper
 - `GET/SET/DEL`
 - `EXPIRE/TTL/PERSIST`
 - lazy expiration
