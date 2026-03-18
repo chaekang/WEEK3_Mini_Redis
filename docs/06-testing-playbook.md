@@ -23,8 +23,8 @@
    - 발표용 비교 시나리오 확인
 
 주의:
-- 현재 활성 병렬 트랙 기준으로 recovery / AOF replay는 필수 테스트가 아니다.
-- protocol 또는 store 최적화가 semantics를 바꾸면 안 된다.
+- AOF recovery / replay는 persistence 범위에서 필수 검증 항목이다.
+- TTL 관련 recovery 검증은 상대 `seconds`가 아니라 절대 만료 시각 `expires_at` 기준으로 확인한다.
 
 ## 2) 테스트 도구
 - test runner: `pytest`
@@ -88,17 +88,20 @@
 
 ### D. `chore/demo-bench-ci-readme`
 자동 테스트 우선순위:
-- `ruff check .`
-- `ruff format --check .`
-- `mypy app`
-- `pytest`
-- benchmark helper correctness
-- benchmark repeatability
+- startup replay recovery
+- malformed AOF startup failure
+- replay 중 file growth 없음
+- expired-at-replay key가 다시 살아나지 않음
+- benchmark helper correctness test
+- 미니 Redis 미사용 시나리오와 사용 시나리오 비교 검증
 
 수동 smoke:
-- 발표 순서 기준 demo smoke
-- HTTP / RESP 데모 흐름이 README와 일치하는지 확인
-- benchmark 시나리오가 짧고 반복 가능한지 확인
+- 캐시 미사용 경로가 동작하는지 확인
+- 미니 Redis 캐시 사용 경로가 더 빠르게 응답하는지 확인
+
+주의:
+- recovery 테스트는 AOF always-on 가정을 따른다.
+- TTL recovery는 `EXPIRE key seconds` 재실행이 아니라 AOF의 절대 만료 시각 `expires_at` 복원 규칙을 검증해야 한다.
 
 ## 5) 테스트 작성 순서
 1. 현재 브랜치가 책임지는 엔티티 / 명령 / API를 다시 확인한다.

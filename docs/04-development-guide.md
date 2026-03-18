@@ -127,14 +127,17 @@
 - benchmark / smoke / CI 정리
 - README 데모 정리
 
-### P4 - 추후 확장
-- AOF-lite
+### P3 - 여유가 있으면
+- benchmark 자동화 확장
 - stretch 명령
 
-## AOF-lite에 대한 현재 결정
-- `app/persistence/` 구조는 유지한다.
-- 그러나 현재 활성 병렬 트랙에서는 AOF-lite를 구현하지 않는다.
-- replay, recovery test, append format은 후속 범위가 열릴 때 별도 브랜치에서 다룬다.
+## AOF Persistence에 대한 현재 결정
+- AOF는 always-on으로 동작한다.
+- AOF 파일 이름은 `appendonly.aof`로 고정한다.
+- startup 시 AOF replay를 먼저 수행한 뒤 외부 요청을 받는다.
+- malformed AOF는 부분 복구 없이 startup fail-fast로 처리한다.
+- `EXPIRE key seconds`는 외부 명령 semantics를 유지하되, 내부 AOF에는 절대 만료 시각 `expires_at`으로 저장한다.
+- recovery와 replay behavior는 절대 만료 시각 기준으로 검증한다.
 
 ## 충돌 처리 규칙
 - 텍스트 conflict 자체는 두려워하지 않는다.
@@ -157,25 +160,29 @@
 
 ## 권장 브랜치별 초점
 
-### `feature/store-hash-table`
-- custom hash table 구현
-- store wrapper 연결
-- 기존 command semantics 보존
+### `feature/contracts-foundation`
+- command registry
+- shared errors
+- dispatcher contract
+- store interface 문서와 스켈레톤
 
-### `feature/store-heap-sweep`
-- expiration heap
-- lazy expiration + periodic sweep 상호작용
-- coarse lock 유지
+### `feature/store-expiration`
+- Python `dict` 기반 저장소
+- 절대 만료 시각 저장
+- lazy expiration
+- periodic sweep
+- `threading.Lock` 기반 coarse lock
 
-### `feature/protocol-resp`
-- RESP parser / codec / server
-- `app/main.py` wiring
-- HTTP regression 유지
+### `feature/protocol-network`
+- FastAPI route
+- request body schema
+- response serialization
+- Python smoke script
 
-### `chore/demo-bench-ci-readme`
-- benchmark script
-- smoke demo artifacts
-- README / CI polish
+### `feature/persistence-tests-bench`
+- always-on AOF wiring
+- startup replay and recovery test
+- benchmark script는 우선 미니 Redis 미사용/사용 비교 시나리오를 기준으로 한다
 
 ## Merge 기준
 - 자동 테스트 통과

@@ -16,10 +16,8 @@ flowchart LR
     HH --> D[Command Dispatcher]
     RS --> D
     D --> S[Store Layer]
-    S --> HT[Custom Hash Table]
-    S --> EM[Expiration Metadata]
-    EM --> EH[Min-Heap Sweep]
-    S --> A[AOF-lite Optional]
+    S --> E[Expiration Metadata]
+    S --> A[AOF Persistence]
 ```
 
 ### 1) Protocol Layer
@@ -96,14 +94,20 @@ flowchart LR
 - periodic sweep는 1초 주기 tick으로 시작한다.
 - sweep도 일반 명령과 동일한 `threading.Lock`을 잡고 동작한다.
 
-### 5) AOF-lite
+### 5) AOF Persistence
 역할:
 - write 명령 append
 - 서버 시작 시 replay
 
 고정 결정:
-- AOF-lite는 현재 활성 병렬 트랙의 구현 대상이 아니다.
-- 다만 추후 추가를 쉽게 하기 위해 `app/persistence/` 구조와 조립 지점은 열어둔다.
+
+- AOF는 항상 활성화한다.
+- AOF 파일 이름은 `appendonly.aof`로 고정한다.
+- append 대상은 성공한 write 명령만 포함한다.
+- `SET`, `DEL`, `PERSIST`는 명령 의미 그대로 append한다.
+- `EXPIRE`는 상대 `seconds`가 아니라 절대 만료 시각 `expires_at`을 내부 AOF entry로 append한다.
+- `PING`, `GET`, `TTL`은 append하지 않는다.
+- malformed AOF는 startup을 즉시 실패시킨다.
 
 ## HTTP API Contract
 
@@ -303,14 +307,14 @@ class Store:
 - lock-free 구조
 
 ## 명령 처리 흐름
-1. HTTP 요청 또는 RESP frame이 도착한다.
-2. HTTP handler 또는 RESP server가 transport 형식을 파싱한다.
-3. protocol layer가 dispatcher를 호출한다.
-4. dispatcher가 command semantics와 arity를 검증한다.
-5. store가 실제 로직을 수행한다.
-6. 필요하면 향후 AOF append 지점으로 전달한다.
-7. HTTP serializer 또는 RESP serializer가 응답을 작성한다.
-8. client에 반환한다.
+1. client 요청 도착
+2. FastAPI handler가 endpoint와 body를 파싱
+3. protocol layer가 dispatcher 호출
+4. dispatcher가 command semantics와 arity를 검증
+5. store가 실제 로직 수행
+6. 성공한 write 명령이면 AOF append 지점으로 전달
+7. serializer가 JSON 응답 작성
+8. client에 반환
 
 ## Expiration 흐름
 
@@ -326,23 +330,28 @@ class Store:
 - stale heap entry는 `expire_map`에 저장된 현재 값과 비교해 무시한다.
 - sweep도 일반 명령과 동일한 `threading.Lock`을 잡고 동작한다.
 
-## Persistence 흐름 (미래 확장용)
+## persistence 흐름
 
 ### append
 - `SET a 1`
 - `DEL a`
-- `EXPIRE a 10`
+- `EXPIRE a 10` -> internal AOF entry `EXPIREAT a <expires_at>`
 - `PERSIST a`
 
-write 계열 명령만 로그에 append한다.
+규칙:
+- 성공한 write 계열 명령만 로그에 append한다.
+- `PING`, `GET`, `TTL`은 로그에 append하지 않는다.
+- `EXPIRE`는 replay 시점의 상대 시간이 아니라 append 시점의 절대 만료 시각을 기록해야 한다.
+- `expires_at`은 Unix timestamp 기준 절대 시각이다.
 
 ### replay
 - 서버 시작 시 파일을 순서대로 읽는다.
 - dispatcher 또는 replay executor로 재적용한다.
 - replay 중에는 다시 append 하지 않도록 보호한다.
-
-현재 상태:
-- persistence는 구조만 열어두고 이번 활성 병렬 트랙에서는 구현하지 않는다.
+- replay는 반드시 server listen 이전에 완료한다.
+- `expires_at <= now`인 entry는 이미 만료된 것으로 보고 복원하지 않는다.
+- AOF 파일이 없으면 빈 상태로 시작한다.
+- malformed AOF는 부분 복구 없이 startup을 실패시킨다.
 
 ## main.py 조립 원칙
 
@@ -367,20 +376,20 @@ write 계열 명령만 로그에 append한다.
 `main.py`는 아래 순서로 모듈을 조립한다.
 
 1. `Store`를 생성한다.
-2. 필요하면 `AOF writer` 또는 persistence 관련 객체를 생성한다.
-3. `Dispatcher(store, optional_aof_writer)`를 생성한다.
-4. `HttpHandler(dispatcher)`를 생성한다.
-5. `RespServer(dispatcher)`를 생성한다.
-6. expiration sweeper를 시작한다.
-7. HTTP server와 RESP server를 listen 상태로 전환한다.
+2. `AOF writer` 또는 persistence 관련 객체를 생성한다.
+3. `Dispatcher(store, aof_writer)`를 생성한다.
+4. 서버가 외부 요청을 받기 전에 AOF replay를 먼저 수행한다.
+5. `HttpHandler(dispatcher)`를 생성한다.
+6. expiration sweep를 사용하는 경우 sweeper를 시작한다.
+7. HTTP server를 listen 상태로 전환한다.
 
 ### startup sequence
 권장 시작 순서는 아래와 같다.
 
 1. store 생성
-2. persistence 객체 생성(선택)
+2. persistence 객체 생성
 3. dispatcher 생성
-4. AOF replay 수행(선택)
+4. AOF replay 수행
 5. HTTP handler / server 생성
 6. RESP server 생성
 7. expiration sweeper 시작
@@ -390,6 +399,8 @@ write 계열 명령만 로그에 append한다.
 AOF replay는 반드시 **server listen 이전**에 수행한다.
 이유는 복구가 끝나지 않은 중간 상태를 외부 요청이 관찰하면 안 되기 때문이다.
 replay 중에는 append가 다시 발생하지 않도록 보호해야 한다.
+TTL 관련 replay는 상대 `seconds`를 다시 적용하는 방식이 아니라 AOF에 저장된 절대 만료 시각 `expires_at`을 기준으로 처리해야 한다.
+즉 `expires_at <= now`면 해당 key는 이미 만료된 것으로 보고 복원하지 않는다.
 
 ### expiration sweep 정책
 periodic sweep는 store와 동일한 동시성 규칙을 따라야 한다.
@@ -401,7 +412,7 @@ periodic sweep는 store와 동일한 동시성 규칙을 따라야 한다.
 
 1. 새 요청 수신 중단
 2. sweeper 중단
-3. 필요하면 AOF flush / close
+3. AOF flush / close
 4. 서버 종료
 
 ### 비목표
