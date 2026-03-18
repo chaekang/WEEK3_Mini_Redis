@@ -23,7 +23,7 @@ def test_append_order_is_preserved_during_replay() -> None:
 
         with AofWriter(aof_path) as writer:
             writer.append_set("user:1", "hello world")
-            writer.append_expire("user:1", 15)
+            writer.append_expireat("user:1", 115.0)
             writer.append_persist("user:1")
             writer.append_delete("user:1")
 
@@ -33,7 +33,7 @@ def test_append_order_is_preserved_during_replay() -> None:
         assert applied == 4
         assert replayed == [
             AofEntry(command="SET", args=("user:1", "hello world")),
-            AofEntry(command="EXPIRE", args=("user:1", 15)),
+            AofEntry(command="EXPIREAT", args=("user:1", 115.0)),
             AofEntry(command="PERSIST", args=("user:1",)),
             AofEntry(command="DEL", args=("user:1",)),
         ]
@@ -45,13 +45,13 @@ def test_replay_callback_can_recover_latest_state() -> None:
 
         with AofWriter(aof_path) as writer:
             writer.append_set("session:1", "warm")
-            writer.append_expire("session:1", 30)
+            writer.append_expireat("session:1", 130.0)
             writer.append_set("session:2", "cold")
             writer.append_persist("session:1")
             writer.append_delete("session:2")
 
         state: dict[str, str] = {}
-        expire_map: dict[str, int] = {}
+        expire_map: dict[str, float] = {}
 
         def apply_entry(entry: AofEntry) -> None:
             if entry.command == "SET":
@@ -69,12 +69,12 @@ def test_replay_callback_can_recover_latest_state() -> None:
                 expire_map.pop(key, None)
                 return
 
-            if entry.command == "EXPIRE":
-                key, seconds = entry.args
+            if entry.command == "EXPIREAT":
+                key, expires_at = entry.args
                 assert isinstance(key, str)
-                assert type(seconds) is int
+                assert type(expires_at) is float
                 if key in state:
-                    expire_map[key] = seconds
+                    expire_map[key] = expires_at
                 return
 
             if entry.command == "PERSIST":
@@ -125,17 +125,29 @@ def test_replay_raises_parse_error_for_malformed_line() -> None:
             replay_aof(aof_path, lambda entry: None)
 
 
-def test_expire_seconds_stays_an_integer_in_json_lines() -> None:
+def test_expireat_timestamp_stays_a_float_in_json_lines() -> None:
     with workspace_tmpdir() as tmp_path:
         aof_path = tmp_path / "appendonly.aof"
 
         with AofWriter(aof_path) as writer:
-            writer.append_expire("cart:1", 42)
+            writer.append_expireat("cart:1", 42.0)
 
         payload = json.loads(aof_path.read_text(encoding="utf-8").strip())
         replayed: list[AofEntry] = []
         replay_aof(aof_path, replayed.append)
 
-        assert payload == {"command": "EXPIRE", "args": ["cart:1", 42]}
-        assert replayed[0] == AofEntry(command="EXPIRE", args=("cart:1", 42))
-        assert type(replayed[0].args[1]) is int
+        assert payload == {"command": "EXPIREAT", "args": ["cart:1", 42.0]}
+        assert replayed[0] == AofEntry(command="EXPIREAT", args=("cart:1", 42.0))
+        assert type(replayed[0].args[1]) is float
+
+
+def test_replay_rejects_expireat_with_integer_timestamp() -> None:
+    with workspace_tmpdir() as tmp_path:
+        aof_path = tmp_path / "appendonly.aof"
+        aof_path.write_text(
+            '{"command":"EXPIREAT","args":["cart:1",42]}\n',
+            encoding="utf-8",
+        )
+
+        with pytest.raises(AofParseError, match="line 1"):
+            replay_aof(aof_path, lambda entry: None)

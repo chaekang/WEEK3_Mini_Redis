@@ -17,7 +17,7 @@ class AofEntry:
     """A single AOF write operation."""
 
     command: str
-    args: tuple[str | int, ...]
+    args: tuple[str | float, ...]
 
     def __post_init__(self) -> None:
         _validate_entry(self.command, self.args)
@@ -61,8 +61,8 @@ class AofWriter:
     def append_delete(self, key: str) -> None:
         self._append(AofEntry(command="DEL", args=(key,)))
 
-    def append_expire(self, key: str, seconds: int) -> None:
-        self._append(AofEntry(command="EXPIRE", args=(key, seconds)))
+    def append_expireat(self, key: str, expires_at: float) -> None:
+        self._append(AofEntry(command="EXPIREAT", args=(key, expires_at)))
 
     def append_persist(self, key: str) -> None:
         self._append(AofEntry(command="PERSIST", args=(key,)))
@@ -85,7 +85,7 @@ class AofWriter:
         self._handle.write("\n")
 
 
-def _validate_entry(command: str, args: tuple[str | int, ...]) -> None:
+def _validate_entry(command: str, args: tuple[str | float, ...]) -> None:
     if command == "SET":
         if len(args) != 2 or not all(isinstance(item, str) for item in args):
             raise AofParseError("SET requires string key and value")
@@ -96,9 +96,9 @@ def _validate_entry(command: str, args: tuple[str | int, ...]) -> None:
             raise AofParseError(f"{command} requires a string key")
         return
 
-    if command == "EXPIRE":
-        if len(args) != 2 or not isinstance(args[0], str) or type(args[1]) is not int:
-            raise AofParseError("EXPIRE requires string key and integer seconds")
+    if command == "EXPIREAT":
+        if len(args) != 2 or not isinstance(args[0], str) or type(args[1]) is not float:
+            raise AofParseError("EXPIREAT requires string key and float expires_at")
         return
 
     raise AofParseError(f"unsupported AOF command: {command}")

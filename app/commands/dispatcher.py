@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
 
 from app.commands.errors import (
     CommandError,
@@ -11,7 +12,9 @@ from app.commands.errors import (
     WrongNumberOfArgumentsError,
 )
 from app.commands.registry import CommandSpec, build_registry, resolve_command
+from app.core.expiration import calculate_expires_at
 from app.core.interfaces import StoreProtocol
+from app.persistence import AofEntry, AofWriter
 
 
 def _ping_handler(_: StoreProtocol, __: Sequence[str]) -> str:
@@ -72,9 +75,14 @@ class Dispatcher:
         self,
         store: StoreProtocol,
         registry: dict[str, CommandSpec] | None = None,
+        aof_writer: AofWriter | None = None,
+        clock: Callable[[], float] | None = None,
     ) -> None:
         self.store = store
         self.registry = registry or DEFAULT_REGISTRY
+        self.aof_writer = aof_writer
+        self._clock = clock if clock is not None else time.time
+        self._suppress_aof = False
 
     def dispatch(self, command_name: str, arguments: Sequence[str]) -> object:
         """Validate and dispatch a command using the shared command registry."""
@@ -84,8 +92,67 @@ class Dispatcher:
             raise WrongNumberOfArgumentsError(command_spec.name)
 
         try:
-            return command_spec.handler(self.store, arguments)
+            result = command_spec.handler(self.store, arguments)
+            self._append_command(command_spec.name, arguments)
+            return result
         except CommandError:
             raise
         except Exception as error:
             raise InternalError() from error
+
+    def apply_aof_entry(self, entry: AofEntry) -> None:
+        """Apply a replayed AOF entry without generating new AOF lines."""
+
+        previous_suppression = self._suppress_aof
+        self._suppress_aof = True
+        try:
+            if entry.command == "SET":
+                key, value = entry.args
+                assert isinstance(key, str)
+                assert isinstance(value, str)
+                self.store.set(key, value)
+                return
+
+            if entry.command == "DEL":
+                (key,) = entry.args
+                assert isinstance(key, str)
+                self.store.delete(key)
+                return
+
+            if entry.command == "PERSIST":
+                (key,) = entry.args
+                assert isinstance(key, str)
+                self.store.persist(key)
+                return
+
+            if entry.command == "EXPIREAT":
+                key, expires_at = entry.args
+                assert isinstance(key, str)
+                assert type(expires_at) is float
+                self.store.expireat(key, expires_at)
+                return
+
+            raise ValueError(f"unsupported replay command: {entry.command}")
+        finally:
+            self._suppress_aof = previous_suppression
+
+    def _append_command(self, command_name: str, arguments: Sequence[str]) -> None:
+        if self.aof_writer is None or self._suppress_aof:
+            return
+
+        if command_name == "SET":
+            self.aof_writer.append_set(arguments[0], arguments[1])
+        elif command_name == "DEL":
+            self.aof_writer.append_delete(arguments[0])
+        elif command_name == "PERSIST":
+            self.aof_writer.append_persist(arguments[0])
+        elif command_name == "EXPIRE":
+            expires_at = calculate_expires_at(
+                self._clock(),
+                _parse_int_argument("EXPIRE", arguments[1]),
+            )
+            self.aof_writer.append_expireat(arguments[0], expires_at)
+        else:
+            return
+
+        self.aof_writer.flush()

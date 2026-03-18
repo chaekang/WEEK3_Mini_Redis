@@ -11,6 +11,7 @@ from app.commands.errors import (
     UnknownCommandError,
     WrongNumberOfArgumentsError,
 )
+from app.persistence import AofEntry
 
 
 class FakeStore:
@@ -36,6 +37,10 @@ class FakeStore:
             raise RuntimeError("boom")
         return 1
 
+    def expireat(self, key: str, expires_at: float) -> int:
+        self.calls.append(("expireat", (key, expires_at)))
+        return 1
+
     def ttl(self, key: str) -> int:
         self.calls.append(("ttl", (key,)))
         return -1
@@ -47,6 +52,27 @@ class FakeStore:
     def sweep_expired(self) -> int:
         self.calls.append(("sweep_expired", ()))
         return 0
+
+
+class FakeAofWriter:
+    def __init__(self) -> None:
+        self.entries: list[AofEntry] = []
+        self.flush_calls = 0
+
+    def append_set(self, key: str, value: str) -> None:
+        self.entries.append(AofEntry(command="SET", args=(key, value)))
+
+    def append_delete(self, key: str) -> None:
+        self.entries.append(AofEntry(command="DEL", args=(key,)))
+
+    def append_expireat(self, key: str, expires_at: float) -> None:
+        self.entries.append(AofEntry(command="EXPIREAT", args=(key, expires_at)))
+
+    def append_persist(self, key: str) -> None:
+        self.entries.append(AofEntry(command="PERSIST", args=(key,)))
+
+    def flush(self) -> None:
+        self.flush_calls += 1
 
 
 def test_dispatcher_dispatches_ping_without_store_usage() -> None:
@@ -103,3 +129,72 @@ def test_dispatcher_maps_unexpected_store_errors_to_internal_error() -> None:
 
     with pytest.raises(InternalError, match="internal error"):
         dispatcher.dispatch("EXPIRE", ["session", "10"])
+
+
+def test_dispatcher_appends_set_to_aof_after_success() -> None:
+    store = FakeStore()
+    writer = FakeAofWriter()
+    dispatcher = Dispatcher(store, aof_writer=writer)
+
+    result = dispatcher.dispatch("SET", ["user:1", "hello"])
+
+    assert result == "OK"
+    assert writer.entries == [AofEntry(command="SET", args=("user:1", "hello"))]
+    assert writer.flush_calls == 1
+
+
+def test_dispatcher_appends_expire_as_expireat_timestamp() -> None:
+    store = FakeStore()
+    writer = FakeAofWriter()
+    dispatcher = Dispatcher(store, aof_writer=writer, clock=lambda: 100.0)
+
+    result = dispatcher.dispatch("EXPIRE", ["session", "15"])
+
+    assert result == 1
+    assert writer.entries == [AofEntry(command="EXPIREAT", args=("session", 115.0))]
+    assert writer.flush_calls == 1
+
+
+def test_dispatcher_does_not_append_read_only_commands() -> None:
+    store = FakeStore()
+    writer = FakeAofWriter()
+    dispatcher = Dispatcher(store, aof_writer=writer)
+
+    assert dispatcher.dispatch("PING", []) == "PONG"
+    assert dispatcher.dispatch("GET", ["user:1"]) == (True, "value")
+    assert dispatcher.dispatch("TTL", ["user:1"]) == -1
+    assert writer.entries == []
+    assert writer.flush_calls == 0
+
+
+def test_dispatcher_does_not_append_when_command_fails() -> None:
+    store = FakeStore()
+    store.raise_error = True
+    writer = FakeAofWriter()
+    dispatcher = Dispatcher(store, aof_writer=writer)
+
+    with pytest.raises(InternalError, match="internal error"):
+        dispatcher.dispatch("EXPIRE", ["session", "10"])
+
+    assert writer.entries == []
+    assert writer.flush_calls == 0
+
+
+def test_apply_aof_entry_replays_without_appending_again() -> None:
+    store = FakeStore()
+    writer = FakeAofWriter()
+    dispatcher = Dispatcher(store, aof_writer=writer)
+
+    dispatcher.apply_aof_entry(AofEntry(command="SET", args=("a", "1")))
+    dispatcher.apply_aof_entry(AofEntry(command="EXPIREAT", args=("a", 150.0)))
+    dispatcher.apply_aof_entry(AofEntry(command="PERSIST", args=("a",)))
+    dispatcher.apply_aof_entry(AofEntry(command="DEL", args=("a",)))
+
+    assert store.calls == [
+        ("set", ("a", "1")),
+        ("expireat", ("a", 150.0)),
+        ("persist", ("a",)),
+        ("delete", ("a",)),
+    ]
+    assert writer.entries == []
+    assert writer.flush_calls == 0
