@@ -1,62 +1,70 @@
 from __future__ import annotations
 
 import argparse
-import time
-from collections.abc import Callable
+import asyncio
+import sys
 
-from benchmark_helper import compare_cases, format_summary_table
-
-
-def build_without_cache(source_latency_ms: float) -> Callable[[], str]:
-    def fetch_without_cache() -> str:
-        time.sleep(source_latency_ms / 1000)
-        return "fresh-value"
-
-    return fetch_without_cache
-
-
-def build_with_cache(source_latency_ms: float) -> Callable[[], str]:
-    cache: dict[str, str] = {}
-
-    def fetch_with_cache() -> str:
-        if "item" not in cache:
-            time.sleep(source_latency_ms / 1000)
-            cache["item"] = "cached-value"
-        return cache["item"]
-
-    return fetch_with_cache
+from benchmark_helper import format_summary_table, run_cache_vs_origin_benchmark
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run the branch-local benchmark harness with a simulated cache path."
+        description=(
+            "Compare a slow dummy origin endpoint against the same request path "
+            "with Mini Redis used as an HTTP cache."
+        )
     )
     parser.add_argument(
-        "--iterations", type=int, default=20, help="Measured runs per case."
+        "--iterations",
+        type=int,
+        default=20,
+        help="Measured requests per case.",
     )
     parser.add_argument(
-        "--warmup", type=int, default=1, help="Warmup runs before measuring."
+        "--warmup",
+        type=int,
+        default=1,
+        help="Warmup requests per case before timing starts.",
     )
     parser.add_argument(
-        "--source-latency-ms",
+        "--origin-latency-ms",
         type=float,
         default=20.0,
-        help="Simulated upstream latency in milliseconds.",
+        help="Artificial latency added by the dummy origin endpoint.",
+    )
+    parser.add_argument(
+        "--key",
+        default="benchmark:hot-key",
+        help="Hot key used for both the origin and Mini Redis cache path.",
     )
     return parser.parse_args()
 
 
-def main() -> int:
-    args = parse_args()
-    comparison = compare_cases(
-        build_without_cache(args.source_latency_ms),
-        build_with_cache(args.source_latency_ms),
+async def main_async(args: argparse.Namespace) -> int:
+    comparison = await run_cache_vs_origin_benchmark(
+        key=args.key,
         iterations=args.iterations,
         warmup=args.warmup,
+        origin_latency_ms=args.origin_latency_ms,
     )
-    print("Simulated cache benchmark")
+
+    print("Mini Redis cache-vs-origin benchmark")
+    print(f"key: {args.key}")
+    print(f"iterations: {args.iterations}")
+    print(f"warmup: {args.warmup}")
+    print(f"origin latency: {args.origin_latency_ms:.1f} ms")
+    print()
     print(format_summary_table(comparison))
     return 0
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        return asyncio.run(main_async(args))
+    except ValueError as exc:
+        print(f"Benchmark configuration error: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
