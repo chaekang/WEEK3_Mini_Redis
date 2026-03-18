@@ -55,6 +55,18 @@ class Store:
             self.expire_map[key] = calculate_expires_at(now, seconds)
             return 1
 
+    def expireat(self, key: str, expires_at: float) -> int:
+        with self.lock:
+            now = self._clock()
+            self._purge_expired_key_unlocked(key, now)
+            if key not in self.data_map:
+                return 0
+            if is_expired(expires_at, now):
+                self._delete_key_unlocked(key)
+                return 1
+            self.expire_map[key] = expires_at
+            return 1
+
     def ttl(self, key: str) -> int:
         with self.lock:
             now = self._clock()

@@ -97,3 +97,25 @@ def test_sweep_expired_removes_only_expired_keys() -> None:
     assert store.get("a") == (False, None)
     assert store.get("b") == (True, "two")
     assert store.get("c") == (True, "three")
+
+
+def test_expireat_restores_future_absolute_timestamp() -> None:
+    clock = FakeClock()
+    store = Store(clock=clock)
+
+    store.set("future", "value")
+
+    assert store.expireat("future", 110.0) == 1
+    assert store.expire_map["future"] == 110.0
+    assert store.ttl("future") == 10
+
+
+def test_expireat_immediately_deletes_when_timestamp_is_past() -> None:
+    clock = FakeClock()
+    store = Store(clock=clock)
+
+    store.set("past", "value")
+
+    assert store.expireat("past", 99.0) == 1
+    assert store.get("past") == (False, None)
+    assert "past" not in store.expire_map

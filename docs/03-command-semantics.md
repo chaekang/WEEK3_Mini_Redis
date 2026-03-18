@@ -4,7 +4,7 @@
 프로토콜보다 위에 있는 규칙이며, 코드보다 먼저 합의해야 한다.
 
 이 문서는 **명령의 의미(semantic result)** 를 정의한다.
-즉, URL 경로나 함수 이름보다 먼저 **각 명령이 어떤 결과를 내야 하는지**를 고정한다.
+즉, URL 경로나 socket handler보다 먼저 **각 명령이 어떤 결과를 내야 하는지**를 고정한다.
 
 ---
 
@@ -12,10 +12,12 @@
 
 아래 항목은 **구현 시작 전에 다시 토론하지 않고 그대로 시작**한다.
 
-- 외부 인터페이스는 **HTTP + JSON** 으로 간다.
-- **RESP는 이번 MVP의 외부 인터페이스가 아니다.**
+- 외부 인터페이스는 **HTTP + JSON** 과 **RESP subset TCP** 를 함께 사용한다.
+- RESP를 추가해도 기존 HTTP 동작은 유지한다.
+- 명령 의미론은 protocol-neutral이며, HTTP와 RESP는 같은 semantic result를 공유한다.
+- RESP 요청은 **array of bulk strings only** 로 제한한다.
 - missing value는 HTTP에서 **404가 아니라 200 OK** 로 응답한다.
-- `GET` miss 응답은 다음 JSON 형태로 고정한다.
+- `GET` miss의 HTTP 응답은 아래 JSON 형태로 고정한다.
 
 ```json
 {
@@ -24,12 +26,14 @@
 }
 ```
 
+- `GET` miss의 RESP 응답은 **null bulk string** 으로 고정한다.
 - `EXPIRE key seconds` 에서 `seconds <= 0` 이면 **즉시 삭제 처리**로 간다.
   - key가 존재했다면 `1`
   - key가 없었다면 `0`
 - `DEL`은 **이번 MVP에서 single-key만 지원**한다.
 - Stretch 명령(`INCR`, `MGET`, `MSET`)은 문서에 정의하되,
   **필수 기능과 테스트가 끝나기 전까지 구현 범위에 포함하지 않는다.**
+- AOF-lite는 이번 활성 병렬 트랙의 범위 밖이다.
 
 ---
 
@@ -42,13 +46,22 @@
 - `SET`은 기존 값을 덮어쓴다.
 - `SET`이 기존 key를 덮어쓰면, 기존 TTL은 제거된다.
 - future stretch 명령 중 `INCR`처럼 **기존 값을 교체하는 게 아니라 갱신하는 명령**은 TTL을 유지한다.
-- 이 문서는 명령 의미를 정의하며, 구체적인 endpoint 경로는 별도 구현 문서 또는 코드에서 정한다.
+- 이 문서는 명령 의미를 정의하며, 구체적인 HTTP endpoint와 RESP server wiring은 별도 구현 문서 또는 코드에서 정한다.
+
+---
+
+## Protocol-Neutral Principle
+
+- dispatcher는 protocol-neutral semantic result를 만든다.
+- HTTP layer와 RESP layer는 그 결과를 각자 직렬화한다.
+- command arity, integer parsing, missing key, TTL 계산 규칙은 protocol마다 달라지면 안 된다.
+- protocol layer는 transport shape validation을 담당하지만, command semantics 자체를 다시 정의하지 않는다.
 
 ---
 
 ## HTTP 응답 직렬화 원칙
 
-이번 프로젝트는 HTTP를 외부 인터페이스로 사용하므로, 응답 직렬화 규칙을 아래처럼 고정한다.
+HTTP 응답 직렬화 규칙은 아래처럼 고정한다.
 
 ### 성공 응답
 
@@ -84,12 +97,6 @@
 
 ### 에러 응답
 
-- unknown command / unsupported command
-- wrong number of arguments
-- invalid integer parse
-- wrong type
-- internal error
-
 기본 형식:
 ```json
 { "error": "..." }
@@ -98,6 +105,59 @@
 기본 정책:
 - 잘못된 요청 / 잘못된 입력 / 지원하지 않는 명령 -> `400 Bad Request`
 - 예상하지 못한 내부 오류 -> `500 Internal Server Error`
+
+---
+
+## RESP 요청 / 응답 직렬화 원칙
+
+### 요청 규칙
+
+- RESP 요청은 `array of bulk strings`만 허용한다.
+- 첫 번째 bulk string은 command 이름이다.
+- 이후 bulk string들은 command 인자다.
+- inline command, nested array, non-bulk element는 protocol error다.
+
+요청 예:
+```text
+*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n
+```
+
+### 응답 규칙
+
+- simple string:
+```text
++PONG\r\n
+```
+
+또는
+```text
++OK\r\n
+```
+
+- bulk string:
+```text
+$5\r\nhello\r\n
+```
+
+- null bulk string:
+```text
+$-1\r\n
+```
+
+- integer:
+```text
+:1\r\n
+```
+
+- simple error:
+```text
+-wrong number of arguments for GET\r\n
+```
+
+규칙:
+- semantic error 메시지는 HTTP 에러 메시지와 같은 영어 문구를 재사용한다.
+- malformed RESP frame도 simple error로 반환한다.
+- RESP 추가가 HTTP 직렬화 규칙을 바꾸지는 않는다.
 
 ---
 
@@ -120,6 +180,11 @@ HTTP 직렬화 예:
 { "result": "PONG" }
 ```
 
+RESP 직렬화 예:
+```text
++PONG\r\n
+```
+
 ---
 
 ### 2) GET
@@ -138,7 +203,8 @@ GET key
 규칙:
 - expired 상태면 조회 전에 삭제한다.
 - missing은 에러가 아니다.
-- missing은 HTTP에서 404가 아니라 `200 OK` 로 응답한다.
+- missing은 HTTP에서 `200 OK` 로 응답한다.
+- missing은 RESP에서 null bulk string으로 응답한다.
 
 HTTP 직렬화:
 - hit
@@ -149,6 +215,17 @@ HTTP 직렬화:
 - miss
 ```json
 { "found": false, "value": null }
+```
+
+RESP 직렬화:
+- hit
+```text
+$5\r\nhello\r\n
+```
+
+- miss
+```text
+$-1\r\n
 ```
 
 ---
@@ -173,6 +250,11 @@ SET key value
 HTTP 직렬화 예:
 ```json
 { "result": "OK" }
+```
+
+RESP 직렬화 예:
+```text
++OK\r\n
 ```
 
 ---
@@ -203,6 +285,11 @@ HTTP 직렬화 예:
 { "result": 1 }
 ```
 
+RESP 직렬화 예:
+```text
+:1\r\n
+```
+
 ---
 
 ### 5) EXPIRE
@@ -230,6 +317,11 @@ HTTP 직렬화 예:
 { "result": 1 }
 ```
 
+RESP 직렬화 예:
+```text
+:1\r\n
+```
+
 ---
 
 ### 6) TTL
@@ -255,6 +347,11 @@ HTTP 직렬화 예:
 { "result": -1 }
 ```
 
+RESP 직렬화 예:
+```text
+:-1\r\n
+```
+
 ---
 
 ### 7) PERSIST
@@ -276,6 +373,11 @@ PERSIST key
 HTTP 직렬화 예:
 ```json
 { "result": 1 }
+```
+
+RESP 직렬화 예:
+```text
+:1\r\n
 ```
 
 ---
@@ -356,17 +458,23 @@ HTTP 직렬화 예:
 
 ---
 
-## HTTP-Level Error Mapping
+## Error Mapping
 
-- unknown or unsupported command -> `400 Bad Request`
-- wrong number of arguments -> `400 Bad Request`
-- invalid integer -> `400 Bad Request`
-- wrong type -> `400 Bad Request`
-- internal error -> `500 Internal Server Error`
+- unknown or unsupported command -> HTTP `400 Bad Request`, RESP simple error
+- wrong number of arguments -> HTTP `400 Bad Request`, RESP simple error
+- invalid integer -> HTTP `400 Bad Request`, RESP simple error
+- wrong type -> HTTP `400 Bad Request`, RESP simple error
+- malformed RESP request shape -> RESP simple error
+- internal error -> HTTP `500 Internal Server Error`, RESP simple error
 
-에러 바디 예:
+HTTP 에러 바디 예:
 ```json
 { "error": "wrong number of arguments for INCR" }
+```
+
+RESP 에러 바디 예:
+```text
+-wrong number of arguments for INCR\r\n
 ```
 
 ---
@@ -375,8 +483,11 @@ HTTP 직렬화 예:
 
 구현 시작 전에 다시 논의하지 않는다.
 
-- external interface는 **HTTP**
-- missing GET 응답은 **`200 OK` + `{ "found": false, "value": null }`**
+- external interface는 **HTTP + RESP**
+- HTTP는 유지하고 RESP는 추가한다.
+- missing `GET` 응답은 **HTTP에서 `200 OK` + `{ "found": false, "value": null }`**
+- missing `GET` 응답은 **RESP에서 null bulk string**
 - `EXPIRE <= 0` 은 **즉시 삭제**
 - `DEL`은 **MVP에서 single-key only**
+- RESP 요청은 **array of bulk strings only**
 - Stretch 명령은 **문서화만 하고 기본 구현 범위에서는 제외**
