@@ -75,6 +75,14 @@
 
 ### C. `feature/store-heap-sweep`
 자동 테스트 우선순위:
+- hash table 기반 store put/get/delete
+- overwrite behavior
+- `SET`이 TTL 제거하는지
+- `EXPIRE`, `TTL`, `PERSIST`
+- 절대 만료 시각 저장/계산
+- lazy expiration
+- 1초 주기 periodic sweep
+- coarse lock 하에서 상태 일관성이 유지되는지
 - heap ordering
 - stale heap entry cleanup
 - TTL / lazy expiration interaction

@@ -110,6 +110,13 @@ Read AGENTS.md and docs/01 through docs/06. Work only inside branch feature/stor
 목표:
 - lazy expiration은 유지하고, periodic expiration cleanup path를 min-heap 기반으로 최적화한다.
 
+주요 결과물:
+- 직접 구현한 hash table 기반 store wrapper
+- `GET/SET/DEL`
+- `EXPIRE/TTL/PERSIST`
+- lazy expiration
+- 1초 주기 periodic sweep
+- shared `threading.Lock`
 Allowed files:
 - `app/core/expiration.py`
 - `app/core/expiration_heap.py`

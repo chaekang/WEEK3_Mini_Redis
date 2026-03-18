@@ -70,6 +70,8 @@ flowchart LR
 - `expiration_heap`: `(expires_at, key)` min-heap
 
 고정 결정:
+- 현재 MVP 저장소의 기본 자료구조는 직접 구현한 hash table이다.
+- store는 public API를 유지한 채 내부에서 hash table 구현을 감싸는 wrapper 형태를 유지한다.
 - 기본 저장 구조는 custom hash table이다.
 - public `Store` API는 유지하고, 내부 자료구조만 교체한다.
 - custom hash table 구현 전략은 아래처럼 고정한다.

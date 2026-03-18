@@ -167,7 +167,7 @@
 - store interface 문서와 스켈레톤
 
 ### `feature/store-expiration`
-- Python `dict` 기반 저장소
+- 직접 구현한 hash table 기반 저장소
 - 절대 만료 시각 저장
 - lazy expiration
 - periodic sweep
