@@ -31,8 +31,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run the branch-local benchmark harness with a simulated cache path."
     )
-    parser.add_argument("--iterations", type=int, default=20, help="Measured runs per case.")
-    parser.add_argument("--warmup", type=int, default=1, help="Warmup runs before measuring.")
+    parser.add_argument(
+        "--iterations", type=int, default=20, help="Measured runs per case."
+    )
+    parser.add_argument(
+        "--warmup", type=int, default=1, help="Warmup runs before measuring."
+    )
     parser.add_argument(
         "--source-latency-ms",
         type=float,

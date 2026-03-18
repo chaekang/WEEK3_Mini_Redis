@@ -12,7 +12,7 @@ class AofParseError(ValueError):
     """Raised when an AOF entry cannot be parsed or validated."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class AofEntry:
     """A single AOF write operation."""
 

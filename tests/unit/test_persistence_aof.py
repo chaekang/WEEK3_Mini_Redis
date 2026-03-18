@@ -119,7 +119,9 @@ def test_replay_returns_zero_when_log_file_is_missing() -> None:
 def test_replay_raises_parse_error_for_malformed_line() -> None:
     with workspace_tmpdir() as tmp_path:
         aof_path = tmp_path / "appendonly.aof"
-        aof_path.write_text('{"command":"SET","args":["a","1"]}\nnot-json\n', encoding="utf-8")
+        aof_path.write_text(
+            '{"command":"SET","args":["a","1"]}\nnot-json\n', encoding="utf-8"
+        )
 
         with pytest.raises(AofParseError, match="line 2"):
             replay_aof(aof_path, lambda entry: None)

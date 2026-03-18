@@ -193,6 +193,7 @@ async def test_malformed_json_maps_to_invalid_request() -> None:
     assert fake_executor.calls == []
 
 
+<<<<<<< feature/persistence-tests-bench
 def test_default_app_starts_with_missing_aof_file(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
 
@@ -256,3 +257,19 @@ def test_default_app_fails_startup_for_malformed_aof(
     with pytest.raises(AofParseError, match="line 2"):
         with TestClient(create_app()):
             pass
+=======
+@pytest.mark.anyio
+async def test_default_app_wires_the_real_command_stack() -> None:
+    app = create_app()
+
+    ping_response = await request(app, "GET", "/v1/ping")
+    set_response = await request(app, "PUT", "/v1/keys/alpha", json={"value": "1"})
+    get_response = await request(app, "GET", "/v1/keys/alpha")
+
+    assert ping_response.status_code == 200
+    assert ping_response.json() == {"result": "PONG"}
+    assert set_response.status_code == 200
+    assert set_response.json() == {"result": "OK"}
+    assert get_response.status_code == 200
+    assert get_response.json() == {"found": True, "value": "1"}
+>>>>>>> chore/dev
