@@ -4,6 +4,7 @@ from app.core.expiration import (
     is_expired,
     ttl_seconds,
 )
+from app.core.hash_table import HashTable
 from app.core.store import Store
 
 
@@ -19,13 +20,16 @@ class FakeClock:
 
 
 def test_expiration_helpers_use_absolute_timestamps() -> None:
-    expire_map = {"a": 100.0, "b": 110.0, "c": 95.0}
+    expire_map = HashTable[float]()
+    expire_map["a"] = 100.0
+    expire_map["b"] = 110.0
+    expire_map["c"] = 95.0
 
     assert calculate_expires_at(100.0, 10) == 110.0
     assert is_expired(100.0, 100.0)
     assert not is_expired(110.0, 100.0)
     assert ttl_seconds(110.0, 103.2) == 6
-    assert find_expired_keys(expire_map, 100.0) == ["a", "c"]
+    assert sorted(find_expired_keys(expire_map, 100.0)) == ["a", "c"]
 
 
 def test_expire_stores_absolute_time_and_ttl_counts_down() -> None:

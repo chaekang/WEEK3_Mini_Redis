@@ -10,6 +10,7 @@ from app.core.expiration import (
     is_expired,
     ttl_seconds,
 )
+from app.core.hash_table import HashTable
 from app.core.lock import create_store_lock
 
 
@@ -17,8 +18,8 @@ class Store:
     """In-memory key/value store with TTL metadata and coarse locking."""
 
     def __init__(self, clock: Optional[Callable[[], float]] = None) -> None:
-        self.data_map: dict[str, str] = {}
-        self.expire_map: dict[str, float] = {}
+        self.data_map: HashTable[str] = HashTable()
+        self.expire_map: HashTable[float] = HashTable()
         self.lock: LockType = create_store_lock()
         self._clock = clock if clock is not None else time.time
 
