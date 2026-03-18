@@ -258,13 +258,12 @@ def test_default_app_fails_startup_for_malformed_aof(
             pass
 
 
-@pytest.mark.anyio
-async def test_default_app_wires_the_real_command_stack() -> None:
-    app = create_app()
-
-    ping_response = await request(app, "GET", "/v1/ping")
-    set_response = await request(app, "PUT", "/v1/keys/alpha", json={"value": "1"})
-    get_response = await request(app, "GET", "/v1/keys/alpha")
+def test_default_app_wires_the_real_command_stack() -> None:
+    """Use TestClient so app lifespan runs and command_executor is set."""
+    with TestClient(create_app()) as client:
+        ping_response = client.get("/v1/ping")
+        set_response = client.put("/v1/keys/alpha", json={"value": "1"})
+        get_response = client.get("/v1/keys/alpha")
 
     assert ping_response.status_code == 200
     assert ping_response.json() == {"result": "PONG"}
