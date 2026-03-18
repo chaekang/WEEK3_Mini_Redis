@@ -21,6 +21,10 @@
 Read AGENTS.md and docs/01 through docs/06. Work only inside the scope of branch <branch-name>. Before coding, summarize the assigned outcome, allowed files, fixed contracts, out-of-scope items, and required tests. Then implement only that branch scope, run the relevant checks, and prepare a PR-ready summary.
 ```
 
+고정 계약 메모:
+- 동시성 모델은 `store-level coarse lock`으로 이미 확정되어 있다.
+- protocol 변경이 필요하더라도 store concurrency policy는 임의로 바꾸지 않는다.
+
 ## 3) 공통 작업 원칙
 - 한 AI는 한 브랜치의 한 결과만 다룬다.
 - 담당 브랜치 범위를 벗어난 파일은 수정하지 않는다.
@@ -75,6 +79,7 @@ Read AGENTS.md and docs/01 through docs/06. Work only inside the scope of branch
 
 주요 결과물:
 - hash table 또는 store wrapper
+- store-level coarse lock
 - `GET/SET/DEL`
 - `EXPIRE/TTL/PERSIST`
 - lazy expiration
@@ -87,6 +92,7 @@ Read AGENTS.md and docs/01 through docs/06. Work only inside the scope of branch
 
 금지:
 - protocol 응답 형식 임의 변경
+- single event loop 등 다른 동시성 모델로 확장
 
 ### D. `feature/persistence-tests-bench`
 목표:
@@ -114,6 +120,7 @@ Read AGENTS.md and docs/01 through docs/06. Work only inside the scope of branch
 - 다만 아래 계약은 A 브랜치 문서를 먼저 따른다:
   - command return value
   - TTL semantics
+  - concurrency model
   - error format
   - replay semantics
 
