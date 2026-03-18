@@ -192,13 +192,16 @@ async def test_malformed_json_maps_to_invalid_request() -> None:
 
 
 @pytest.mark.anyio
-async def test_default_app_exposes_unwired_dependency_without_breaking_ping() -> None:
+async def test_default_app_wires_the_real_command_stack() -> None:
     app = create_app()
 
     ping_response = await request(app, "GET", "/v1/ping")
     set_response = await request(app, "PUT", "/v1/keys/alpha", json={"value": "1"})
+    get_response = await request(app, "GET", "/v1/keys/alpha")
 
     assert ping_response.status_code == 200
     assert ping_response.json() == {"result": "PONG"}
-    assert set_response.status_code == 500
-    assert set_response.json() == {"error": "internal error"}
+    assert set_response.status_code == 200
+    assert set_response.json() == {"result": "OK"}
+    assert get_response.status_code == 200
+    assert get_response.json() == {"found": True, "value": "1"}

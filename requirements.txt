@@ -1,4 +1,8 @@
 fastapi==0.115.12
+httpx
+pytest-cov
+pytest-mock
+time-machine
 uvicorn==0.30.6
 pytest
 ruff
